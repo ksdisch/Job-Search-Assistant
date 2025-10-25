@@ -1,0 +1,5 @@
+{
+  "name": "AI Job Search Companion",
+  "description": "An intelligent application that streamlines your entire job search process. It analyzes job descriptions against your resume, generates tailored application materials, and helps you track your progress from discovery to offer.",
+  "requestFramePermissions": []
+}
