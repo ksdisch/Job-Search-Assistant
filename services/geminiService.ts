@@ -1,10 +1,11 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { FitAnalysis } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-const model = 'gemini-2.5-flash';
+const PRO_MODEL = 'gemini-2.5-pro';
+const FLASH_MODEL = 'gemini-2.5-flash';
 
 export const analyzeJobFit = async (jobDescription: string, resume: string): Promise<FitAnalysis> => {
   try {
@@ -27,9 +28,10 @@ export const analyzeJobFit = async (jobDescription: string, resume: string): Pro
     `;
 
     const response = await ai.models.generateContent({
-      model,
+      model: PRO_MODEL,
       contents: prompt,
       config: {
+        thinkingConfig: { thinkingBudget: 32768 },
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -48,17 +50,18 @@ export const analyzeJobFit = async (jobDescription: string, resume: string): Pro
     return JSON.parse(jsonText) as FitAnalysis;
   } catch (error) {
     console.error("Error analyzing job fit:", error);
-    throw new Error("Failed to analyze job fit. Please check the console for details.");
+    throw new Error("Failed to analyze job fit. This is a complex task and may sometimes fail. Please try again.");
   }
 };
 
-const generateText = async (prompt: string): Promise<string> => {
+const generateText = async (prompt: string, model: string, config?: Record<string, any>): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
       model,
       contents: prompt,
        config: {
           temperature: 0.7,
+          ...config,
       }
     });
     return response.text;
@@ -84,7 +87,7 @@ export const generateCoverLetter = (jobDescription: string, resume: string): Pro
     ${resume}
     ---
   `;
-  return generateText(prompt);
+  return generateText(prompt, PRO_MODEL, { thinkingConfig: { thinkingBudget: 32768 } });
 };
 
 export const generateResumeBullets = (jobDescription: string, resume: string): Promise<string> => {
@@ -103,7 +106,7 @@ export const generateResumeBullets = (jobDescription: string, resume: string): P
     ${resume}
     ---
   `;
-  return generateText(prompt);
+  return generateText(prompt, PRO_MODEL, { thinkingConfig: { thinkingBudget: 32768 } });
 };
 
 export const generateOutreachPitch = (jobDescription: string, resume: string): Promise<string> => {
@@ -121,5 +124,37 @@ export const generateOutreachPitch = (jobDescription: string, resume: string): P
     ${resume}
     ---
   `;
-  return generateText(prompt);
+  return generateText(prompt, FLASH_MODEL);
+};
+
+export const improveContent = (contentToImprove: string): Promise<string> => {
+  const prompt = `You are an expert career coach. Rewrite the following text to be more impactful and professional for a job application. Keep the core message intact but enhance the language and tone.\n\nTEXT:\n---\n${contentToImprove}\n---`;
+  return generateText(prompt, FLASH_MODEL);
+};
+
+// --- Chatbot Functionality ---
+let chatSession: Chat | null = null;
+
+function getChatSession(): Chat {
+    if (!chatSession) {
+        chatSession = ai.chats.create({
+            model: FLASH_MODEL,
+            config: {
+                systemInstruction: 'You are a helpful and friendly AI assistant for a job search application. Your name is Career Companion. You can answer questions about job searching, careers, resumes, and provide general advice.',
+            },
+        });
+    }
+    return chatSession;
+}
+
+export const sendMessageToBot = async (message: string): Promise<string> => {
+    try {
+        const chat = getChatSession();
+        const response = await chat.sendMessage({ message });
+        return response.text;
+    } catch (error) {
+        console.error("Error in chat:", error);
+        chatSession = null; // Reset session on error
+        throw new Error("Failed to get response from the bot. The session has been reset. Please try again.");
+    }
 };

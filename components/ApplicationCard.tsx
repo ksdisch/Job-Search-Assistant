@@ -1,19 +1,23 @@
-
 import React from 'react';
 import { Application } from '../types';
 
 interface ApplicationCardProps {
   application: Application;
   onClick: () => void;
+  onDragStart: (e: React.DragEvent<HTMLDivElement>, appId: string) => void;
+  onDragEnd: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
-const ApplicationCard: React.FC<ApplicationCardProps> = ({ application, onClick }) => {
+const ApplicationCard: React.FC<ApplicationCardProps> = ({ application, onClick, onDragStart, onDragEnd }) => {
   return (
     <div
-      className="bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer hover:bg-gray-700 transition-colors duration-200 border border-gray-700"
+      draggable
+      onDragStart={(e) => onDragStart(e, application.id)}
+      onDragEnd={onDragEnd}
+      className="bg-gray-800 p-4 rounded-lg shadow-lg cursor-grab hover:bg-gray-700 transition-all duration-200 border border-gray-700 active:cursor-grabbing"
       onClick={onClick}
     >
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-4 pointer-events-none">
         <img src={application.logo} alt={`${application.company} logo`} className="w-12 h-12 rounded-full flex-shrink-0" />
         <div className="flex-grow overflow-hidden">
           <h3 className="text-md font-bold text-white truncate">{application.title}</h3>

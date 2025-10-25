@@ -35,3 +35,8 @@ export interface GeneratedContent {
   resumeBullets?: string;
   outreachPitch?: string;
 }
+
+export interface Message {
+  role: 'user' | 'model';
+  text: string;
+}
