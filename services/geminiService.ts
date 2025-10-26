@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { FitAnalysis } from '../types';
 
@@ -6,6 +5,35 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 const PRO_MODEL = 'gemini-2.5-pro';
 const FLASH_MODEL = 'gemini-2.5-flash';
+
+// Helper to convert File to base64 for Gemini API
+const fileToGenerativePart = async (file: File) => {
+  const base64EncodedDataPromise = new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+    reader.readAsDataURL(file);
+  });
+  return {
+    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+  };
+};
+
+export const extractTextFromFile = async (file: File): Promise<string> => {
+    try {
+      const filePart = await fileToGenerativePart(file);
+      const prompt = "Extract the text content from this resume file. Output only the raw text, with no additional commentary or formatting.";
+
+      const response = await ai.models.generateContent({
+        model: FLASH_MODEL,
+        contents: { parts: [filePart, { text: prompt }] },
+      });
+
+      return response.text;
+    } catch (error) {
+      console.error("Error extracting text from file:", error);
+      throw new Error("Failed to extract text from the file. The file might be corrupted or in an unsupported format. Please try again or paste the text manually.");
+    }
+  };
 
 export const analyzeJobFit = async (jobDescription: string, resume: string): Promise<FitAnalysis> => {
   try {

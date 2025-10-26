@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import * as geminiService from '../services/geminiService';
 
 interface ResumePageProps {
   resume: string;
@@ -9,6 +10,8 @@ interface ResumePageProps {
 const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate }) => {
   const [editText, setEditText] = useState(resume);
   const [isSaved, setIsSaved] = useState(false);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -21,24 +24,31 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate }) => {
     setTimeout(() => setIsSaved(false), 2500);
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result;
-      if (typeof text === 'string') {
-        setEditText(text);
-      }
-    };
-    reader.onerror = (e) => {
-        console.error("Error reading file:", e);
-        alert("Sorry, there was an error reading the file.");
-    }
-    reader.readAsText(file);
+    setFileError(null);
+    setIsProcessingFile(true);
 
-    // Reset file input value to allow re-uploading the same file
+    const isTextFile = file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md');
+
+    try {
+      if (isTextFile) {
+        const text = await file.text();
+        setEditText(text);
+      } else {
+        const extractedText = await geminiService.extractTextFromFile(file);
+        setEditText(extractedText);
+      }
+    } catch (e) {
+      console.error("File handling failed:", e);
+      const message = (e as Error).message || "An unexpected error occurred while processing the file.";
+      setFileError(message);
+    } finally {
+        setIsProcessingFile(false);
+    }
+
     event.target.value = '';
   };
 
@@ -60,17 +70,24 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate }) => {
             </p>
         </div>
         <div className="flex items-center space-x-4">
+            {isProcessingFile && (
+                <div className="flex items-center space-x-2 text-sm text-gray-400 animate-fade-in">
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    <span>Processing File...</span>
+                </div>
+            )}
              {isSaved && <p className="text-green-400 text-sm animate-fade-in">Saved successfully!</p>}
              <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 className="hidden"
-                accept=".txt,.md,.text"
+                accept=".txt,.md,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
              />
              <button
                 onClick={handleUploadClick}
-                className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                disabled={isProcessingFile}
+                className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-500 disabled:cursor-wait text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
              >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -79,7 +96,7 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate }) => {
              </button>
             <button
                 onClick={handleSave}
-                disabled={!hasChanges}
+                disabled={!hasChanges || isProcessingFile}
                 className="bg-teal-600 hover:bg-teal-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center space-x-2"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -89,12 +106,19 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate }) => {
             </button>
         </div>
       </div>
+      
+      {fileError && (
+        <div className="mb-4 bg-red-900/40 text-red-300 p-3 rounded-md text-sm animate-fade-in flex justify-between items-center">
+            <span>{fileError}</span>
+            <button onClick={() => setFileError(null)} className="text-red-200 hover:text-white text-lg font-bold leading-none p-1">&times;</button>
+        </div>
+      )}
 
       {/* Text Area */}
       <div className="flex-grow flex flex-col bg-gray-800/50 rounded-lg overflow-hidden border border-gray-700">
         <div className="p-2 bg-gray-900 border-b border-gray-700 flex-shrink-0">
             <p className="text-xs text-gray-400">
-                You can paste your resume text below or upload a plain text file (.txt, .md).
+                You can paste your resume text below or upload a plain text, PDF, or Word document.
             </p>
         </div>
         <textarea
