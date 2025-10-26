@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Message } from '../types';
 import * as geminiService from '../services/geminiService';
@@ -21,8 +20,11 @@ const SendIcon: React.FC = () => (
     </svg>
 );
 
+interface ChatBotProps {
+    careerPreferences: string;
+}
 
-const ChatBot: React.FC = () => {
+const ChatBot: React.FC<ChatBotProps> = ({ careerPreferences }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { role: 'model', text: 'Hello! I\'m your Career Companion. How can I help you with your job search today?' }
@@ -58,7 +60,7 @@ const ChatBot: React.FC = () => {
         setIsLoading(true);
 
         try {
-            const botResponseText = await geminiService.sendMessageToBot(userMessage.text);
+            const botResponseText = await geminiService.sendMessageToBot(userMessage.text, careerPreferences);
             const botMessage: Message = { role: 'model', text: botResponseText };
             setMessages(prev => [...prev, botMessage]);
         } catch (error) {

@@ -21,7 +21,7 @@ const fileToGenerativePart = async (file: File) => {
 export const extractTextFromFile = async (file: File): Promise<string> => {
     try {
       const filePart = await fileToGenerativePart(file);
-      const prompt = "Extract the text content from this resume file. After extracting, please format it for optimal readability, ensuring proper line breaks, consistent spacing, and clear paragraph structure. Output only the formatted text, with no additional commentary or introductions.";
+      const prompt = "Extract the text content from this file. After extracting, please format it for optimal readability, ensuring proper line breaks, consistent spacing, and clear paragraph structure. Output only the formatted text, with no additional commentary or introductions.";
 
       const response = await ai.models.generateContent({
         model: FLASH_MODEL,
@@ -162,27 +162,36 @@ export const improveContent = (contentToImprove: string): Promise<string> => {
 
 // --- Chatbot Functionality ---
 let chatSession: Chat | null = null;
+let currentSystemInstruction: string | null = null;
 
-function getChatSession(): Chat {
-    if (!chatSession) {
+function getChatSession(systemInstruction: string): Chat {
+    if (!chatSession || currentSystemInstruction !== systemInstruction) {
         chatSession = ai.chats.create({
             model: FLASH_MODEL,
             config: {
-                systemInstruction: 'You are a helpful and friendly AI assistant for a job search application. Your name is Career Companion. You can answer questions about job searching, careers, resumes, and provide general advice.',
+                systemInstruction: systemInstruction,
             },
         });
+        currentSystemInstruction = systemInstruction;
     }
     return chatSession;
 }
 
-export const sendMessageToBot = async (message: string): Promise<string> => {
+export const sendMessageToBot = async (message: string, careerPreferences: string): Promise<string> => {
     try {
-        const chat = getChatSession();
+        const baseInstruction = 'You are a helpful and friendly AI assistant for a job search application. Your name is Career Companion. You can answer questions about job searching, careers, resumes, and provide general advice.';
+        
+        const fullInstruction = careerPreferences && careerPreferences.trim()
+            ? `${baseInstruction}\n\nIMPORTANT: Use the following context about the user's career preferences and goals to provide more tailored advice. Refer to it when suggesting jobs, companies, or strategies.\n---\n${careerPreferences}\n---`
+            : baseInstruction;
+
+        const chat = getChatSession(fullInstruction);
         const response = await chat.sendMessage({ message });
         return response.text;
     } catch (error) {
         console.error("Error in chat:", error);
         chatSession = null; // Reset session on error
+        currentSystemInstruction = null;
         throw new Error("Failed to get response from the bot. The session has been reset. Please try again.");
     }
 };

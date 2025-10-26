@@ -12,6 +12,19 @@ interface JobDetailModalProps {
 type GenerationType = 'coverLetter' | 'resumeBullets' | 'outreachPitch';
 type ActionType = GenerationType | 'analysis';
 
+const isValidUrl = (url: string): boolean => {
+    if (!url || url.trim() === '' || url === '#') {
+        return false;
+    }
+    try {
+        const newUrl = new URL(url);
+        // FIX: Moved the closing square bracket outside of the string literal to correctly form an array.
+        return ['http:', 'https:'].includes(newUrl.protocol);
+    } catch (e) {
+        return false;
+    }
+};
+
 const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, onUpdate, resume }) => {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [loadingGeneration, setLoadingGeneration] = useState<GenerationType | null>(null);
@@ -102,6 +115,13 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
     return <ActionButton onClick={handleAnalyzeFit} loading={loadingAnalysis} text="Analyze My Fit" dataTourId="step-3" />;
   };
 
+  const hasValidUrl = isValidUrl(application.url);
+  const applyButtonIcon = (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+  );
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 animate-fade-in">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-700">
@@ -114,9 +134,31 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
               <p className="text-gray-400">{application.company} - {application.location}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-2 rounded-full">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
+          <div className="flex items-center space-x-4">
+            {hasValidUrl ? (
+                <a
+                href={application.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-md transition-all text-sm flex items-center space-x-2"
+                >
+                {applyButtonIcon}
+                <span>Apply Now</span>
+                </a>
+            ) : (
+                <button
+                disabled
+                className="bg-gray-600 cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-all text-sm flex items-center space-x-2"
+                title="Invalid or missing application URL"
+                >
+                {applyButtonIcon}
+                <span>Apply Now</span>
+                </button>
+            )}
+            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-2 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
         </div>
         
         {/* Content */}

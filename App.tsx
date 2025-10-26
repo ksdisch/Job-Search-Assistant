@@ -10,10 +10,22 @@ import OnboardingTour from './components/OnboardingTour';
 import DashboardFilters from './components/DashboardFilters';
 import ResumePage from './components/ResumePage';
 
+const defaultCareerPreferences = `
+- Desired Roles: e.g., Senior Frontend Engineer, Product Manager
+- Industries of Interest: e.g., Tech, Healthcare, Finance
+- Years of Experience: e.g., 5-8 years
+- Location Preferences: e.g., Remote, New York City
+- Target Companies: e.g., Startups, FAANG, specific company names
+- Key Skills to Highlight: e.g., React, TypeScript, Project Management
+- Career Goals: e.g., Transition into a leadership role, specialize in AI/ML
+`.trim();
+
+
 const App: React.FC = () => {
   const [applications, setApplications] = useLocalStorage<Application[]>('job-applications', MOCK_APPLICATIONS);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [resume, setResume] = useLocalStorage<string>('user-resume', MOCK_RESUME);
+  const [careerPreferences, setCareerPreferences] = useLocalStorage<string>('career-preferences', defaultCareerPreferences);
   const [hasCompletedTour, setHasCompletedTour] = useLocalStorage<boolean>('has-completed-tour', false);
   
   const [filters, setFilters] = useState({ status: '', company: '', location: '' });
@@ -67,7 +79,12 @@ const App: React.FC = () => {
           </>
         )}
         {activeTab === 'resume' && (
-          <ResumePage resume={resume} onResumeUpdate={setResume} />
+          <ResumePage
+            resume={resume}
+            onResumeUpdate={setResume}
+            careerPreferences={careerPreferences}
+            onCareerPreferencesUpdate={setCareerPreferences}
+          />
         )}
       </main>
       {activeTab === 'dashboard' && selectedApplication && (
@@ -78,7 +95,7 @@ const App: React.FC = () => {
           resume={resume}
         />
       )}
-      <ChatBot />
+      <ChatBot careerPreferences={careerPreferences} />
     </div>
   );
 };
