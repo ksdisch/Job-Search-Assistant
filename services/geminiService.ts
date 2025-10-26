@@ -21,7 +21,7 @@ const fileToGenerativePart = async (file: File) => {
 export const extractTextFromFile = async (file: File): Promise<string> => {
     try {
       const filePart = await fileToGenerativePart(file);
-      const prompt = "Extract the text content from this resume file. Output only the raw text, with no additional commentary or formatting.";
+      const prompt = "Extract the text content from this resume file. After extracting, please format it for optimal readability, ensuring proper line breaks, consistent spacing, and clear paragraph structure. Output only the formatted text, with no additional commentary or introductions.";
 
       const response = await ai.models.generateContent({
         model: FLASH_MODEL,
