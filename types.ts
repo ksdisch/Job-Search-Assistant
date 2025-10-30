@@ -40,3 +40,9 @@ export interface Message {
   role: 'user' | 'model';
   text: string;
 }
+
+export interface DashboardFiltersState {
+  status: string;
+  company: string;
+  location: string;
+}

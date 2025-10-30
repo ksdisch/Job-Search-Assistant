@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo } from 'react';
-import { Application, ApplicationStatus } from './types';
+import { Application, ApplicationStatus, DashboardFiltersState } from './types';
 import { MOCK_APPLICATIONS, STATUS_COLUMNS, MOCK_RESUME } from './constants';
 import Dashboard from './components/Dashboard';
 import JobDetailModal from './components/JobDetailModal';
@@ -29,7 +30,7 @@ const App: React.FC = () => {
   const [resume, setResume] = useLocalStorage<string>('user-resume', MOCK_RESUME);
   const [careerPreferences, setCareerPreferences] = useLocalStorage<string>('career-preferences', defaultCareerPreferences);
   
-  const [filters, setFilters] = useState({ status: '', company: '', location: '' });
+  const [filters, setFilters] = useLocalStorage<DashboardFiltersState>('job-filters', { status: '', company: '', location: '' });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'resume' | 'guide'>('dashboard');
 
   const handleUpdateApplication = (updatedApp: Application) => {

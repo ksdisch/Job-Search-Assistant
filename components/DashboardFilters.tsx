@@ -1,9 +1,10 @@
+
 import React from 'react';
-import { ApplicationStatus } from '../types';
+import { ApplicationStatus, DashboardFiltersState } from '../types';
 
 interface DashboardFiltersProps {
-  filters: { status: string; company: string; location: string };
-  onFilterChange: (filters: { status: string; company: string; location: string }) => void;
+  filters: DashboardFiltersState;
+  onFilterChange: (filters: DashboardFiltersState) => void;
 }
 
 const DashboardFilters: React.FC<DashboardFiltersProps> = ({ filters, onFilterChange }) => {
