@@ -9,6 +9,7 @@ import useLocalStorage from './useLocalStorage';
 import GuidePage from './components/GuidePage';
 import DashboardFilters from './components/DashboardFilters';
 import ResumePage from './components/ResumePage';
+import LandingPage from './components/LandingPage';
 
 const defaultCareerPreferences = `
 - Desired Roles: e.g., Senior Frontend Engineer, Product Manager
@@ -22,6 +23,7 @@ const defaultCareerPreferences = `
 
 
 const App: React.FC = () => {
+  const [showApp, setShowApp] = useState(false);
   const [applications, setApplications] = useLocalStorage<Application[]>('job-applications', MOCK_APPLICATIONS);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [resume, setResume] = useLocalStorage<string>('user-resume', MOCK_RESUME);
@@ -58,6 +60,10 @@ const App: React.FC = () => {
         );
     });
   }, [applications, filters]);
+
+  if (!showApp) {
+    return <LandingPage onEnterApp={() => setShowApp(true)} />;
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100 font-sans">
