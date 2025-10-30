@@ -6,7 +6,7 @@ import JobDetailModal from './components/JobDetailModal';
 import Header from './components/Header';
 import ChatBot from './components/ChatBot';
 import useLocalStorage from './useLocalStorage';
-import OnboardingTour from './components/OnboardingTour';
+import GuidePage from './components/GuidePage';
 import DashboardFilters from './components/DashboardFilters';
 import ResumePage from './components/ResumePage';
 
@@ -26,10 +26,9 @@ const App: React.FC = () => {
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [resume, setResume] = useLocalStorage<string>('user-resume', MOCK_RESUME);
   const [careerPreferences, setCareerPreferences] = useLocalStorage<string>('career-preferences', defaultCareerPreferences);
-  const [hasCompletedTour, setHasCompletedTour] = useLocalStorage<boolean>('has-completed-tour', false);
   
   const [filters, setFilters] = useState({ status: '', company: '', location: '' });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'resume'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'resume' | 'guide'>('dashboard');
 
   const handleUpdateApplication = (updatedApp: Application) => {
     setApplications(prev => 
@@ -62,7 +61,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100 font-sans">
-      {!hasCompletedTour && <OnboardingTour onComplete={() => setHasCompletedTour(true)} />}
       <Header activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto flex flex-col">
         {activeTab === 'dashboard' && (
@@ -85,6 +83,9 @@ const App: React.FC = () => {
             careerPreferences={careerPreferences}
             onCareerPreferencesUpdate={setCareerPreferences}
           />
+        )}
+        {activeTab === 'guide' && (
+          <GuidePage />
         )}
       </main>
       {activeTab === 'dashboard' && selectedApplication && (

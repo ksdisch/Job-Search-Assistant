@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Application, FitAnalysis } from '../types';
 import * as geminiService from '../services/geminiService';
 
@@ -30,6 +30,14 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
   const [loadingGeneration, setLoadingGeneration] = useState<GenerationType | null>(null);
   const [loadingImprovement, setLoadingImprovement] = useState<GenerationType | null>(null);
   const [errors, setErrors] = useState<Partial<Record<ActionType, string>>>({});
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableApplication, setEditableApplication] = useState<Application>(application);
+
+  useEffect(() => {
+    setEditableApplication(application);
+    setIsEditing(false); // Reset editing state when application changes
+  }, [application]);
+
 
   const handleError = (action: ActionType, e: unknown) => {
     const message = (e as Error).message || 'An unknown error occurred. Please try again.';
@@ -104,6 +112,20 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
     }
   }, [application, onUpdate]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditableApplication(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = () => {
+    onUpdate(editableApplication);
+    setIsEditing(false);
+  };
+  
+  const handleCancel = () => {
+    setEditableApplication(application);
+    setIsEditing(false);
+  };
 
   const renderAnalysisSection = () => {
     if (errors.analysis) {
@@ -112,7 +134,7 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
     if (application.fitAnalysis) {
         return <FitAnalysisResult analysis={application.fitAnalysis} />;
     }
-    return <ActionButton onClick={handleAnalyzeFit} loading={loadingAnalysis} text="Analyze My Fit" dataTourId="step-3" />;
+    return <ActionButton onClick={handleAnalyzeFit} loading={loadingAnalysis} text="Analyze My Fit" />;
   };
 
   const hasValidUrl = isValidUrl(application.url);
@@ -126,34 +148,79 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 animate-fade-in">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-700">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
-          <div className="flex items-center space-x-4">
-            <img src={application.logo} alt="" className="w-12 h-12 rounded-full" />
-            <div>
-              <h2 className="text-xl font-bold text-white">{application.title}</h2>
-              <p className="text-gray-400">{application.company} - {application.location}</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            {hasValidUrl ? (
-                <a
-                href={application.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-md transition-all text-sm flex items-center space-x-2"
-                >
-                {applyButtonIcon}
-                <span>Apply Now</span>
-                </a>
+        <div className="flex items-start justify-between p-4 border-b border-gray-700 flex-shrink-0">
+          <div className="flex items-center space-x-4 flex-grow min-w-0">
+            <img src={application.logo} alt="" className="w-12 h-12 rounded-full self-start flex-shrink-0" />
+            {isEditing ? (
+              <div className="flex-grow space-y-2">
+                <input
+                  type="text"
+                  name="title"
+                  value={editableApplication.title}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 text-white font-bold text-xl p-1 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                  aria-label="Job Title"
+                />
+                <div className="flex items-center space-x-2 text-gray-400">
+                   <input
+                    type="text"
+                    name="company"
+                    value={editableApplication.company}
+                    onChange={handleInputChange}
+                    className="w-1/2 bg-gray-700 p-1 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                    aria-label="Company Name"
+                  />
+                  <span>-</span>
+                  <input
+                    type="text"
+                    name="location"
+                    value={editableApplication.location}
+                    onChange={handleInputChange}
+                    className="w-1/2 bg-gray-700 p-1 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                    aria-label="Job Location"
+                  />
+                </div>
+              </div>
             ) : (
-                <button
-                disabled
-                className="bg-gray-600 cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-all text-sm flex items-center space-x-2"
-                title="Invalid or missing application URL"
-                >
-                {applyButtonIcon}
-                <span>Apply Now</span>
-                </button>
+                <div className="min-w-0">
+                <h2 className="text-xl font-bold text-white truncate">{application.title}</h2>
+                <p className="text-gray-400 truncate">{application.company} - {application.location}</p>
+                </div>
+            )}
+          </div>
+          <div className="flex items-center space-x-2 flex-shrink-0 ml-4">
+            {isEditing ? (
+                <>
+                    <button onClick={handleSave} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-md transition-all text-sm">Save</button>
+                    <button onClick={handleCancel} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-all text-sm">Cancel</button>
+                </>
+            ) : (
+                <>
+                    <button onClick={() => setIsEditing(true)} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-all text-sm flex items-center space-x-2">
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
+                        <span>Edit</span>
+                    </button>
+                    {hasValidUrl ? (
+                        <a
+                        href={application.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-md transition-all text-sm flex items-center space-x-2"
+                        >
+                        {applyButtonIcon}
+                        <span>Apply Now</span>
+                        </a>
+                    ) : (
+                        <button
+                        disabled
+                        className="bg-gray-600 cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-all text-sm flex items-center space-x-2"
+                        title="Invalid or missing application URL"
+                        >
+                        {applyButtonIcon}
+                        <span>Apply Now</span>
+                        </button>
+                    )}
+                </>
             )}
             <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-2 rounded-full">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -178,7 +245,7 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
             </div>
 
             {/* Application Builder */}
-            <div data-tour="step-4">
+            <div>
               <h3 className="text-lg font-semibold text-teal-400 mb-2">Application Builder</h3>
               <div className="space-y-4">
                 <GeneratorSection type="coverLetter" title="Cover Letter" content={application.generatedContent?.coverLetter} onGenerate={handleGenerate} onImprove={handleImprove} loading={loadingGeneration === 'coverLetter'} loadingImprovement={loadingImprovement === 'coverLetter'} error={errors.coverLetter} />
@@ -208,8 +275,8 @@ const ErrorDisplay: React.FC<{ message: string; onRetry: () => void; loading: bo
     </div>
   );
 
-const ActionButton: React.FC<{onClick: () => void, loading: boolean, text: string, dataTourId?: string}> = ({ onClick, loading, text, dataTourId }) => (
-  <button onClick={onClick} disabled={loading} className="w-full bg-teal-600 hover:bg-teal-500 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition-all flex items-center justify-center" data-tour={dataTourId}>
+const ActionButton: React.FC<{onClick: () => void, loading: boolean, text: string}> = ({ onClick, loading, text }) => (
+  <button onClick={onClick} disabled={loading} className="w-full bg-teal-600 hover:bg-teal-500 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition-all flex items-center justify-center">
     {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : text}
   </button>
 );

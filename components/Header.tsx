@@ -1,8 +1,8 @@
 import React from 'react';
 
 interface HeaderProps {
-    activeTab: 'dashboard' | 'resume';
-    onTabChange: (tab: 'dashboard' | 'resume') => void;
+    activeTab: 'dashboard' | 'resume' | 'guide';
+    onTabChange: (tab: 'dashboard' | 'resume' | 'guide') => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
@@ -37,10 +37,15 @@ const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
            </button>
            <button
              onClick={() => onTabChange('resume')}
-             data-tour="step-2"
              className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-200 ${activeTab === 'resume' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-300 hover:bg-gray-700'}`}
            >
              My Resume
+           </button>
+           <button
+             onClick={() => onTabChange('guide')}
+             className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-200 ${activeTab === 'guide' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-300 hover:bg-gray-700'}`}
+           >
+             Guide
            </button>
         </nav>
       </div>

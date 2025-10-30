@@ -36,7 +36,7 @@ const Dashboard: React.FC<DashboardProps> = ({ applications, columns, onCardClic
   return (
     <>
     <style>{`.dragging { opacity: 0.5; transform: scale(0.95); }`}</style>
-    <div data-tour="step-1" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 h-full">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 h-full">
       {columns.map(status => (
         <KanbanColumn key={status} status={status} onDrop={handleDrop}>
           {applications
