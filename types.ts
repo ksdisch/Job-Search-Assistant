@@ -34,11 +34,13 @@ export interface GeneratedContent {
   coverLetter?: string;
   resumeBullets?: string;
   outreachPitch?: string;
+  interviewPrep?: { questions: { type: string; question: string; tip: string }[] };
 }
 
 export interface Message {
   role: 'user' | 'model';
   text: string;
+  sources?: { uri: string; title: string; }[];
 }
 
 export interface DashboardFiltersState {

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Application, ApplicationStatus, DashboardFiltersState } from './types';
 import { MOCK_APPLICATIONS, STATUS_COLUMNS, MOCK_RESUME } from './constants';
@@ -32,6 +31,7 @@ const App: React.FC = () => {
   
   const [filters, setFilters] = useLocalStorage<DashboardFiltersState>('job-filters', { status: '', company: '', location: '' });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'resume' | 'guide'>('dashboard');
+  const [isChatOpen, setIsChatOpen] = useState(true);
 
   const handleUpdateApplication = (updatedApp: Application) => {
     setApplications(prev => 
@@ -42,6 +42,15 @@ const App: React.FC = () => {
     }
   };
   
+  const handleAddNewApplication = (jobData: Omit<Application, 'id' | 'status' | 'fitAnalysis' | 'generatedContent'>) => {
+    const newApplication: Application = {
+        ...jobData,
+        id: `app-${Date.now()}`,
+        status: ApplicationStatus.Discovery,
+    };
+    setApplications(prev => [newApplication, ...prev]);
+  };
+
   const handleApplicationDrop = (appId: string, newStatus: ApplicationStatus) => {
     setApplications(prev =>
       prev.map(app => (app.id === appId ? { ...app, status: newStatus } : app))
@@ -68,33 +77,54 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100 font-sans">
-      <Header activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto flex flex-col">
+      <Header 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab}
+        isChatVisible={isChatOpen}
+        onToggleChat={() => setIsChatOpen(!isChatOpen)} 
+      />
+      <div className="flex flex-grow min-h-0">
+        <main className={`flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto flex flex-col transition-all duration-300 ${isChatOpen && activeTab === 'dashboard' ? 'w-full md:w-3/5 lg:w-2/3' : 'w-full'}`}>
+          {activeTab === 'dashboard' && (
+            <>
+              <DashboardFilters filters={filters} onFilterChange={setFilters} />
+              <div className="flex-grow min-h-0">
+                  <Dashboard
+                    applications={filteredApplications}
+                    columns={STATUS_COLUMNS}
+                    onCardClick={setSelectedApplication}
+                    onApplicationDrop={handleApplicationDrop}
+                  />
+              </div>
+            </>
+          )}
+          {activeTab === 'resume' && (
+            <ResumePage
+              resume={resume}
+              onResumeUpdate={setResume}
+              careerPreferences={careerPreferences}
+              onCareerPreferencesUpdate={setCareerPreferences}
+            />
+          )}
+          {activeTab === 'guide' && (
+            <GuidePage />
+          )}
+        </main>
+        
         {activeTab === 'dashboard' && (
-          <>
-            <DashboardFilters filters={filters} onFilterChange={setFilters} />
-            <div className="flex-grow min-h-0">
-                <Dashboard
-                  applications={filteredApplications}
-                  columns={STATUS_COLUMNS}
-                  onCardClick={setSelectedApplication}
-                  onApplicationDrop={handleApplicationDrop}
+          <aside className={`flex-shrink-0 bg-gray-800/50 border-l border-gray-700 transition-all duration-300 ease-in-out ${isChatOpen ? 'w-full md:w-2/5 lg:w-1/3' : 'w-0'}`} style={{ overflow: 'hidden' }}>
+              {isChatOpen && (
+                <ChatBot 
+                    careerPreferences={careerPreferences} 
+                    onAddNewApplication={handleAddNewApplication}
+                    applications={applications}
+                    resume={resume}
                 />
-            </div>
-          </>
+              )}
+          </aside>
         )}
-        {activeTab === 'resume' && (
-          <ResumePage
-            resume={resume}
-            onResumeUpdate={setResume}
-            careerPreferences={careerPreferences}
-            onCareerPreferencesUpdate={setCareerPreferences}
-          />
-        )}
-        {activeTab === 'guide' && (
-          <GuidePage />
-        )}
-      </main>
+      </div>
+
       {activeTab === 'dashboard' && selectedApplication && (
         <JobDetailModal
           application={selectedApplication}
@@ -103,7 +133,6 @@ const App: React.FC = () => {
           resume={resume}
         />
       )}
-      <ChatBot careerPreferences={careerPreferences} />
     </div>
   );
 };

@@ -1,5 +1,5 @@
-import { GoogleGenAI, Type, Chat } from "@google/genai";
-import { FitAnalysis } from '../types';
+import { GoogleGenAI, Type } from "@google/genai";
+import { FitAnalysis, Job } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
@@ -160,38 +160,213 @@ export const improveContent = (contentToImprove: string): Promise<string> => {
   return generateText(prompt, FLASH_MODEL);
 };
 
-// --- Chatbot Functionality ---
-let chatSession: Chat | null = null;
-let currentSystemInstruction: string | null = null;
+export const improveResume = (resumeText: string): Promise<string> => {
+    const prompt = `
+    As an expert career coach and professional resume writer, thoroughly review and rewrite the following resume.
+    Your goal is to make it more impactful, professional, and tailored to stand out for roles like software engineering, product management, and other tech positions.
 
-function getChatSession(systemInstruction: string): Chat {
-    if (!chatSession || currentSystemInstruction !== systemInstruction) {
-        chatSession = ai.chats.create({
-            model: FLASH_MODEL,
+    Focus on the following improvements:
+    1.  **Action Verbs:** Start each bullet point with a strong, dynamic action verb.
+    2.  **Quantifiable Achievements:** Whenever possible, add metrics and quantifiable results to demonstrate impact (e.g., "increased efficiency by 20%", "managed a team of 5"). If numbers aren't present, frame responsibilities as achievements.
+    3.  **Conciseness:** Eliminate jargon, filler words, and passive voice. Make every word count.
+    4.  **Formatting:** Ensure clean and professional formatting. Use bullet points effectively. The professional summary should be a concise and powerful paragraph.
+    5.  **Keywords:** Naturally integrate relevant keywords for modern tech roles.
+
+    Return only the full, improved resume text. Do not include any commentary before or after.
+
+    ORIGINAL RESUME:
+    ---
+    ${resumeText}
+    ---
+    `;
+    return generateText(prompt, PRO_MODEL, { thinkingConfig: { thinkingBudget: 32768 } });
+};
+
+export const generateCareerGoals = (resumeText: string): Promise<string> => {
+    const prompt = `
+    Based on the provided resume, act as a career advisor and generate a set of career preferences and goals for the user to put into their AI Job Search Companion profile.
+    This context helps the AI provide more tailored advice.
+    The output should be a list covering the following points, with example content filled in based on the resume.
+
+    - Desired Roles:
+    - Industries of Interest:
+    - Years of Experience: (extract from resume)
+    - Location Preferences: (suggest common options like Remote, or major tech hubs if not specified)
+    - Target Companies: (suggest types like Startups, FAANG, etc.)
+    - Key Skills to Highlight: (extract top skills from resume)
+    - Career Goals: (infer potential short-term and long-term goals, e.g., leadership, specialization)
+
+    RESUME:
+    ---
+    ${resumeText}
+    ---
+    `;
+    return generateText(prompt, PRO_MODEL, { thinkingConfig: { thinkingBudget: 32768 } });
+};
+
+export const generateInterviewQuestions = async (jobDescription: string, resume: string): Promise<{ questions: { type: string; question: string; tip: string }[] }> => {
+    try {
+        const prompt = `
+            As an expert technical recruiter and interview coach, analyze the provided job description and candidate's resume.
+            Generate a list of 5-7 potential interview questions that are highly relevant to this specific role and candidate.
+
+            For each question, provide:
+            1. The question itself.
+            2. The type of question (e.g., "Behavioral", "Technical", "Situational").
+            3. A concise "Pro Tip" on how the candidate can best answer it, ideally by referencing their own experience from the resume.
+
+            JOB DESCRIPTION:
+            ---
+            ${jobDescription}
+            ---
+
+            RESUME:
+            ---
+            ${resume}
+            ---
+        `;
+
+        const response = await ai.models.generateContent({
+            model: PRO_MODEL,
+            contents: prompt,
             config: {
-                systemInstruction: systemInstruction,
+                thinkingConfig: { thinkingBudget: 32768 },
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        questions: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    type: { type: Type.STRING, description: 'Type of question (e.g., Behavioral, Technical)' },
+                                    question: { type: Type.STRING, description: 'The interview question' },
+                                    tip: { type: Type.STRING, description: 'A tip for answering, referencing the resume' },
+                                },
+                                required: ['type', 'question', 'tip'],
+                            },
+                        },
+                    },
+                    required: ['questions'],
+                },
             },
         });
-        currentSystemInstruction = systemInstruction;
+        
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.error("Error generating interview questions:", error);
+        throw new Error("Failed to generate interview questions. This is a complex task and may sometimes fail. Please try again.");
     }
-    return chatSession;
-}
+};
 
-export const sendMessageToBot = async (message: string, careerPreferences: string): Promise<string> => {
+export const researchCompany = async (companyName: string, jobTitle: string): Promise<string> => {
     try {
-        const baseInstruction = 'You are a helpful and friendly AI assistant for a job search application. Your name is Career Companion. You can answer questions about job searching, careers, resumes, and provide general advice.';
+        const prompt = `
+            Provide a concise research briefing about the company "${companyName}" for a candidate interviewing for the role of "${jobTitle}".
+            Use your search tool to find the most recent and relevant information.
+            
+            Structure your response in markdown with the following sections:
+            - **Company Overview:** What does the company do? What is its mission?
+            - **Recent News & Developments:** Mention 1-2 recent news items, product launches, or announcements.
+            - **Company Culture:** Briefly describe the company culture (e.g., fast-paced, collaborative, innovative).
+            - **Potential Interview Focus:** Based on the company and role, what areas might the interview focus on?
+        `;
+        const response = await ai.models.generateContent({
+            model: FLASH_MODEL,
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+            },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error researching company:", error);
+        throw new Error("Failed to research the company. The search tool might be unavailable. Please try again.");
+    }
+};
+
+export const extractJobDetails = async (url: string): Promise<Omit<Job, 'id' | 'logo'>> => {
+    try {
+        const prompt = `
+            Analyze the content of the webpage at the following URL and extract the key details of the job posting.
+            URL: ${url}
+            
+            Extract the following information:
+            - The job title.
+            - The company name.
+            - The location of the job (e.g., "San Francisco, CA", "Remote").
+            - The full job description, formatted as plain text with appropriate line breaks.
+            - A direct URL to apply for the job. If an "Apply" link is present on the page, use that link. Otherwise, use the original URL provided.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: FLASH_MODEL,
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING, description: 'The title of the job.' },
+                        company: { type: Type.STRING, description: 'The name of the company.' },
+                        location: { type: Type.STRING, description: 'The location of the job.' },
+                        description: { type: Type.STRING, description: 'The full job description text.' },
+                        url: { type: Type.STRING, description: 'The direct application URL.' },
+                    },
+                    required: ['title', 'company', 'location', 'description', 'url'],
+                },
+            },
+        });
+        
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as Omit<Job, 'id' | 'logo'>;
+    } catch (error) {
+        console.error("Error extracting job details:", error);
+        throw new Error("Failed to extract job details from the link. The page might not be a valid job posting or could be inaccessible.");
+    }
+};
+
+// --- Chatbot Functionality ---
+export const sendMessageToBot = async (message: string, careerPreferences: string): Promise<{ text: string, sources?: {uri: string, title: string}[] }> => {
+    try {
+        const baseInstruction = 'You are a helpful and friendly AI assistant for a job search application. Your name is Career Companion. You can answer questions about job searching, careers, resumes, and provide general advice. When asked to find jobs, use your search tool to find relevant, up-to-date job listings and provide links.';
         
         const fullInstruction = careerPreferences && careerPreferences.trim()
             ? `${baseInstruction}\n\nIMPORTANT: Use the following context about the user's career preferences and goals to provide more tailored advice. Refer to it when suggesting jobs, companies, or strategies.\n---\n${careerPreferences}\n---`
             : baseInstruction;
 
-        const chat = getChatSession(fullInstruction);
-        const response = await chat.sendMessage({ message });
-        return response.text;
+        const response = await ai.models.generateContent({
+            model: FLASH_MODEL,
+            contents: message,
+            config: {
+                systemInstruction: fullInstruction,
+                tools: [{ googleSearch: {} }],
+            },
+        });
+
+        const text = response.text;
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        
+        // FIX: Correctly typed the `reduce` operation on `groundingChunks`. The original code had a syntax error and
+        // failed to properly type the accumulator, leading to a type mismatch. This ensures the extracted sources are
+        // correctly typed as an array of objects with `uri` and `title`.
+        const sources = (groundingChunks as any[])
+            ?.reduce((acc: { uri: string; title: string }[], chunk: any) => {
+                const web = chunk?.web;
+                if (web?.uri && web.title) {
+                    acc.push({ uri: web.uri, title: web.title });
+                }
+                return acc;
+            }, [] as { uri: string; title: string }[]) || [];
+
+        // Deduplicate sources based on URI
+        const uniqueSources = Array.from(new Map(sources.map(item => [item.uri, item])).values());
+
+        return { text, sources: uniqueSources };
     } catch (error) {
         console.error("Error in chat:", error);
-        chatSession = null; // Reset session on error
-        currentSystemInstruction = null;
-        throw new Error("Failed to get response from the bot. The session has been reset. Please try again.");
+        throw new Error("Failed to get response from the bot. Please try again.");
     }
 };

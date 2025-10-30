@@ -15,6 +15,8 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate, careerP
   const [isProcessingResumeFile, setIsProcessingResumeFile] = useState(false);
   const [resumeFileError, setResumeFileError] = useState<string | null>(null);
   const resumeFileInputRef = useRef<HTMLInputElement>(null);
+  const [isImprovingResume, setIsImprovingResume] = useState(false);
+  const [resumeAiError, setResumeAiError] = useState<string | null>(null);
 
   // State for Preferences section
   const [editPreferences, setEditPreferences] = useState(careerPreferences);
@@ -22,6 +24,8 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate, careerP
   const [isProcessingPrefsFile, setIsProcessingPrefsFile] = useState(false);
   const [prefsFileError, setPrefsFileError] = useState<string | null>(null);
   const prefsFileInputRef = useRef<HTMLInputElement>(null);
+  const [isGeneratingGoals, setIsGeneratingGoals] = useState(false);
+  const [prefsAiError, setPrefsAiError] = useState<string | null>(null);
 
   useEffect(() => {
     setEditResume(resume);
@@ -69,6 +73,37 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate, careerP
     event.target.value = '';
   };
 
+  const handleImproveResume = async () => {
+    setIsImprovingResume(true);
+    setResumeAiError(null);
+    try {
+      const improvedResume = await geminiService.improveResume(editResume);
+      setEditResume(improvedResume);
+    } catch (e) {
+      setResumeAiError((e as Error).message || 'Failed to improve resume.');
+    } finally {
+      setIsImprovingResume(false);
+    }
+  };
+
+  const handleGenerateGoals = async () => {
+    if (!resume.trim()) {
+      setPrefsAiError('Please add your resume first to generate career goals.');
+      return;
+    }
+    setIsGeneratingGoals(true);
+    setPrefsAiError(null);
+    try {
+      const generatedGoals = await geminiService.generateCareerGoals(resume);
+      setEditPreferences(generatedGoals);
+    } catch (e) {
+      setPrefsAiError((e as Error).message || 'Failed to generate suggestions.');
+    } finally {
+      setIsGeneratingGoals(false);
+    }
+  };
+
+
   return (
     <div className="h-full flex flex-col animate-fade-in">
       <div className="flex-shrink-0 mb-6">
@@ -90,6 +125,8 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate, careerP
           </div>
 
           {resumeFileError && <ErrorBanner message={resumeFileError} onClear={() => setResumeFileError(null)} />}
+          {resumeAiError && <ErrorBanner message={resumeAiError} onClear={() => setResumeAiError(null)} />}
+
 
           <textarea
             value={editResume}
@@ -100,9 +137,10 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate, careerP
 
           <div className="p-3 border-t border-gray-700 flex-shrink-0 flex items-center justify-end space-x-3">
              {isResumeSaved && <p className="text-green-400 text-sm animate-fade-in mr-auto">Saved!</p>}
+             <IconButton icon="ai" text="AI Improve" onClick={handleImproveResume} disabled={isImprovingResume || isProcessingResumeFile} loading={isImprovingResume} />
              <input type="file" ref={resumeFileInputRef} onChange={(e) => handleFileChange(e, 'resume')} className="hidden" accept=".txt,.md,.pdf,.doc,.docx" />
              <IconButton icon="upload" text="Upload File" onClick={() => resumeFileInputRef.current?.click()} disabled={isProcessingResumeFile} />
-             <IconButton icon="save" text="Save Resume" onClick={handleResumeSave} disabled={editResume === resume || isProcessingResumeFile} primary />
+             <IconButton icon="save" text="Save Resume" onClick={handleResumeSave} disabled={editResume === resume || isProcessingResumeFile || isImprovingResume} primary />
           </div>
         </div>
 
@@ -117,6 +155,8 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate, careerP
             </div>
             
             {prefsFileError && <ErrorBanner message={prefsFileError} onClear={() => setPrefsFileError(null)} />}
+            {prefsAiError && <ErrorBanner message={prefsAiError} onClear={() => setPrefsAiError(null)} />}
+
 
             <textarea
                 value={editPreferences}
@@ -127,9 +167,10 @@ const ResumePage: React.FC<ResumePageProps> = ({ resume, onResumeUpdate, careerP
 
             <div className="p-3 border-t border-gray-700 flex-shrink-0 flex items-center justify-end space-x-3">
                 {isPrefsSaved && <p className="text-green-400 text-sm animate-fade-in mr-auto">Saved!</p>}
+                <IconButton icon="ai" text="Generate" onClick={handleGenerateGoals} disabled={isGeneratingGoals || isProcessingPrefsFile} loading={isGeneratingGoals} />
                 <input type="file" ref={prefsFileInputRef} onChange={(e) => handleFileChange(e, 'preferences')} className="hidden" accept=".txt,.md,.pdf,.doc,.docx" />
                 <IconButton icon="upload" text="Upload File" onClick={() => prefsFileInputRef.current?.click()} disabled={isProcessingPrefsFile} />
-                <IconButton icon="save" text="Save Context" onClick={handlePreferencesSave} disabled={editPreferences === careerPreferences || isProcessingPrefsFile} primary />
+                <IconButton icon="save" text="Save Context" onClick={handlePreferencesSave} disabled={editPreferences === careerPreferences || isProcessingPrefsFile || isGeneratingGoals} primary />
             </div>
         </div>
       </div>
@@ -154,18 +195,19 @@ const ErrorBanner: React.FC<{ message: string; onClear: () => void; }> = ({ mess
 
 const icons: Record<string, React.ReactElement> = {
     upload: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>,
-    save: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+    save: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>,
+    ai: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
 }
 
-const IconButton: React.FC<{ icon: string; text: string; onClick: () => void; disabled: boolean; primary?: boolean; }> = ({ icon, text, onClick, disabled, primary }) => {
-    const baseClasses = "font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2 disabled:cursor-not-allowed";
+const IconButton: React.FC<{ icon: string; text: string; onClick: () => void; disabled: boolean; primary?: boolean; loading?: boolean; }> = ({ icon, text, onClick, disabled, primary, loading }) => {
+    const baseClasses = "font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 disabled:cursor-not-allowed min-w-[120px]";
     const colorClasses = primary
         ? "bg-teal-600 hover:bg-teal-500 disabled:bg-gray-600 text-white"
         : "bg-gray-700 hover:bg-gray-600 disabled:bg-gray-500 text-white";
 
     return (
-        <button onClick={onClick} disabled={disabled} className={`${baseClasses} ${colorClasses}`}>
-            {icons[icon]}
+        <button onClick={onClick} disabled={disabled || loading} className={`${baseClasses} ${colorClasses}`}>
+            {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : icons[icon]}
             <span>{text}</span>
         </button>
     );

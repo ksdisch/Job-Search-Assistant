@@ -10,7 +10,7 @@ interface JobDetailModalProps {
 }
 
 type GenerationType = 'coverLetter' | 'resumeBullets' | 'outreachPitch';
-type ActionType = GenerationType | 'analysis';
+type ActionType = GenerationType | 'analysis' | 'interviewPrep' | 'companyResearch';
 
 const isValidUrl = (url: string): boolean => {
     if (!url || url.trim() === '' || url === '#') {
@@ -27,11 +27,15 @@ const isValidUrl = (url: string): boolean => {
 
 const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, onUpdate, resume }) => {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
-  const [loadingGeneration, setLoadingGeneration] = useState<GenerationType | null>(null);
+  const [loadingGeneration, setLoadingGeneration] = useState<GenerationType | 'interviewPrep' | null>(null);
   const [loadingImprovement, setLoadingImprovement] = useState<GenerationType | null>(null);
   const [errors, setErrors] = useState<Partial<Record<ActionType, string>>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [editableApplication, setEditableApplication] = useState<Application>(application);
+
+  const [companyResearch, setCompanyResearch] = useState<string | null>(null);
+  const [loadingCompanyResearch, setLoadingCompanyResearch] = useState(false);
+
 
   useEffect(() => {
     setEditableApplication(application);
@@ -91,6 +95,22 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
         setLoadingGeneration(null);
     }
   }, [application, onUpdate, resume]);
+  
+  const handleGenerateInterviewPrep = useCallback(async () => {
+    setLoadingGeneration('interviewPrep');
+    clearError('interviewPrep');
+    try {
+        const prep = await geminiService.generateInterviewQuestions(application.description, resume);
+        onUpdate({
+            ...application,
+            generatedContent: { ...application.generatedContent, interviewPrep: prep }
+        });
+    } catch (e) {
+        handleError('interviewPrep', e);
+    } finally {
+        setLoadingGeneration(null);
+    }
+  }, [application, onUpdate, resume]);
 
   const handleImprove = useCallback(async (type: GenerationType) => {
     const contentToImprove = application.generatedContent?.[type];
@@ -111,6 +131,20 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
         setLoadingImprovement(null);
     }
   }, [application, onUpdate]);
+
+  const handleCompanyResearch = useCallback(async () => {
+    setLoadingCompanyResearch(true);
+    clearError('companyResearch');
+    setCompanyResearch(null);
+    try {
+        const research = await geminiService.researchCompany(application.company, application.title);
+        setCompanyResearch(research);
+    } catch(e) {
+        handleError('companyResearch', e as Error);
+    } finally {
+        setLoadingCompanyResearch(false);
+    }
+  }, [application.company, application.title]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -183,8 +217,18 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
               </div>
             ) : (
                 <div className="min-w-0">
-                <h2 className="text-xl font-bold text-white truncate">{application.title}</h2>
-                <p className="text-gray-400 truncate">{application.company} - {application.location}</p>
+                    <h2 className="text-xl font-bold text-white truncate">{application.title}</h2>
+                    <div className="flex items-center space-x-2 text-gray-400">
+                      <p className="truncate">{application.company} - {application.location}</p>
+                      <button onClick={handleCompanyResearch} disabled={loadingCompanyResearch} className="text-xs text-teal-400 hover:text-teal-300 disabled:text-gray-500 flex items-center space-x-1 p-1 rounded hover:bg-gray-700 transition-colors">
+                          {loadingCompanyResearch ? (
+                              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+                          )}
+                          <span>Research Company</span>
+                      </button>
+                    </div>
                 </div>
             )}
           </div>
@@ -238,6 +282,15 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
 
           {/* Right Panel: AI Tools */}
           <div className="p-6 overflow-y-auto bg-gray-900/50 border-l border-gray-700">
+            {/* Company Research Result */}
+            {errors.companyResearch && <ErrorDisplay message={errors.companyResearch} onRetry={handleCompanyResearch} loading={loadingCompanyResearch} />}
+            {companyResearch && (
+                <div className="mb-6 bg-gray-900 p-4 rounded-lg animate-fade-in prose prose-invert prose-sm max-w-none">
+                    <h3 className="text-lg font-semibold text-teal-400 mb-2">Company Briefing</h3>
+                    <div dangerouslySetInnerHTML={{ __html: companyResearch.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />') }} />
+                </div>
+            )}
+            
             {/* Fit Analysis */}
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-teal-400 mb-2">AI Fit Analysis</h3>
@@ -248,6 +301,7 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({ application, onClose, o
             <div>
               <h3 className="text-lg font-semibold text-teal-400 mb-2">Application Builder</h3>
               <div className="space-y-4">
+                <InterviewPrepSection prep={application.generatedContent?.interviewPrep} onGenerate={handleGenerateInterviewPrep} loading={loadingGeneration === 'interviewPrep'} error={errors.interviewPrep} />
                 <GeneratorSection type="coverLetter" title="Cover Letter" content={application.generatedContent?.coverLetter} onGenerate={handleGenerate} onImprove={handleImprove} loading={loadingGeneration === 'coverLetter'} loadingImprovement={loadingImprovement === 'coverLetter'} error={errors.coverLetter} />
                 <GeneratorSection type="resumeBullets" title="Resume Bullet Points" content={application.generatedContent?.resumeBullets} onGenerate={handleGenerate} onImprove={handleImprove} loading={loadingGeneration === 'resumeBullets'} loadingImprovement={loadingImprovement === 'resumeBullets'} error={errors.resumeBullets} />
                 <GeneratorSection type="outreachPitch" title="Outreach Pitch" content={application.generatedContent?.outreachPitch} onGenerate={handleGenerate} onImprove={handleImprove} loading={loadingGeneration === 'outreachPitch'} loadingImprovement={loadingImprovement === 'outreachPitch'} error={errors.outreachPitch} />
@@ -366,6 +420,62 @@ const GeneratorSection: React.FC<GeneratorSectionProps> = ({ type, title, conten
             {renderContent()}
             {!content && !loading && !error && (
                  <p className="text-sm text-gray-500 italic">Click 'Generate' to create a {title.toLowerCase()}.</p>
+            )}
+        </div>
+    );
+};
+
+const InterviewPrepSection: React.FC<{
+    prep?: { questions: { type: string; question: string; tip: string }[] };
+    loading: boolean;
+    onGenerate: () => void;
+    error?: string;
+}> = ({ prep, loading, onGenerate, error }) => {
+    
+    const renderContent = () => {
+        if (loading) {
+            return <div className="text-sm text-gray-500 italic p-3 text-center">AI is preparing questions...</div>;
+        }
+        if (prep) {
+            return (
+                <div className="text-sm text-gray-300 space-y-3 animate-fade-in p-3">
+                    {prep.questions.map((q, i) => (
+                        <div key={i} className="bg-gray-950 p-3 rounded-md">
+                            <p className="font-semibold text-white">
+                                <span className="text-xs bg-teal-800 text-teal-300 font-bold rounded px-1.5 py-0.5 mr-2">{q.type}</span>
+                                {q.question}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-400 italic border-l-2 border-gray-700 pl-2">
+                                <span className="font-bold text-teal-400">Pro Tip:</span> {q.tip}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        if (error) {
+            return <ErrorDisplay message={error} onRetry={onGenerate} loading={loading} />;
+        }
+        return null;
+    };
+
+    return (
+        <div className="bg-gray-900 p-4 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-white">Interview Prep</h4>
+                {!prep && !error && (
+                    <button 
+                        onClick={onGenerate} 
+                        disabled={loading} 
+                        className="text-sm text-teal-400 hover:text-teal-300 disabled:text-gray-500"
+                    >
+                        {loading ? 'Generating...' : 'Generate Questions'}
+                    </button>
+                )}
+            </div>
+            {renderContent()}
+            {!prep && !loading && !error && (
+                 <p className="text-sm text-gray-500 italic">Click 'Generate' to create tailored interview questions.</p>
             )}
         </div>
     );
