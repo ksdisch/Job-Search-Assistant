@@ -172,13 +172,81 @@ export const improveContent = (contentToImprove: string): Promise<string> => {
   return generateText(prompt, FLASH_MODEL);
 };
 
-// --- Chatbot Functionality ---
-let chatSession: Chat | null = null;
-let currentSystemInstruction: string | null = null;
+export const generateInterviewQuestions = async (jobDescription: string, resume: string): Promise<{ questions: { type: string; question: string; tip: string }[] }> => {
+    try {
+        const prompt = `
+            As an expert technical recruiter and interview coach, analyze the provided job description and candidate's resume.
+            Generate a list of 5-7 potential interview questions that are highly relevant to this specific role and candidate.
 
-function getChatSession(systemInstruction: string): Chat {
-    if (!chatSession || currentSystemInstruction !== systemInstruction) {
-        chatSession = ai.chats.create({
+            For each question, provide:
+            1. The question itself.
+            2. The type of question (e.g., "Behavioral", "Technical", "Situational").
+            3. A concise "Pro Tip" on how the candidate can best answer it, ideally by referencing their own experience from the resume.
+
+            JOB DESCRIPTION:
+            ---
+            ${jobDescription}
+            ---
+
+            RESUME:
+            ---
+            ${resume}
+            ---
+        `;
+
+        const response = await getAI().models.generateContent({
+            model: PRO_MODEL,
+            contents: prompt,
+            config: {
+                thinkingConfig: { thinkingBudget: 32768 },
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        questions: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    type: { type: Type.STRING, description: 'Type of question (e.g., Behavioral, Technical)' },
+                                    question: { type: Type.STRING, description: 'The interview question' },
+                                    tip: { type: Type.STRING, description: 'A tip for answering, referencing the resume' },
+                                },
+                                required: ['type', 'question', 'tip'],
+                            },
+                        },
+                    },
+                    required: ['questions'],
+                },
+            },
+        });
+        
+        const jsonText = response.text.trim();
+        try {
+            return JSON.parse(jsonText) as { questions: { type: string; question: string; tip: string }[] };
+        } catch (parseError) {
+            console.error("Error parsing interview questions JSON:", parseError);
+            throw new Error("Failed to parse interview questions response. Please try again.");
+        }
+    } catch (error) {
+        console.error("Error generating interview questions:", error);
+        throw new Error("Failed to generate interview questions. This is a complex task and may sometimes fail. Please try again.");
+    }
+};
+
+export const researchCompany = async (companyName: string, jobTitle: string): Promise<string> => {
+    try {
+        const prompt = `
+            Provide a concise research briefing about the company "${companyName}" for a candidate interviewing for the role of "${jobTitle}".
+            Use your search tool to find the most recent and relevant information.
+            
+            Structure your response in markdown with the following sections:
+            - **Company Overview:** What does the company do? What is its mission?
+            - **Recent News & Developments:** Mention 1-2 recent news items, product launches, or announcements.
+            - **Company Culture:** Briefly describe the company culture (e.g., fast-paced, collaborative, innovative).
+            - **Potential Interview Focus:** Based on the company and role, what areas might the interview focus on?
+        `;
+        const response = await getAI().models.generateContent({
             model: FLASH_MODEL,
             contents: prompt,
             config: {
@@ -206,7 +274,7 @@ export const extractJobDetails = async (url: string): Promise<Omit<Job, 'id' | '
             - A direct URL to apply for the job. If an "Apply" link is present on the page, use that link. Otherwise, use the original URL provided.
         `;
 
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: FLASH_MODEL,
             contents: prompt,
             config: {
@@ -226,7 +294,12 @@ export const extractJobDetails = async (url: string): Promise<Omit<Job, 'id' | '
         });
         
         const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as Omit<Job, 'id' | 'logo'>;
+        try {
+            return JSON.parse(jsonText) as Omit<Job, 'id' | 'logo'>;
+        } catch (parseError) {
+            console.error("Error parsing job details JSON:", parseError);
+            throw new Error("Failed to parse job details response. Please try again.");
+        }
     } catch (error) {
         console.error("Error extracting job details:", error);
         throw new Error("Failed to extract job details from the link. The page might not be a valid job posting or could be inaccessible.");
@@ -242,7 +315,7 @@ export const sendMessageToBot = async (message: string, careerPreferences: strin
             ? `${baseInstruction}\n\nIMPORTANT: Use the following context about the user's career preferences and goals to provide more tailored advice. Refer to it when suggesting jobs, companies, or strategies.\n---\n${careerPreferences}\n---`
             : baseInstruction;
 
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: FLASH_MODEL,
             contents: message,
             config: {
@@ -267,7 +340,9 @@ export const sendMessageToBot = async (message: string, careerPreferences: strin
             }, [] as { uri: string; title: string }[]) || [];
 
         // Deduplicate sources based on URI
-        const uniqueSources = Array.from(new Map(sources.map(item => [item.uri, item])).values());
+        const uniqueSources = Array.from(
+            new Map<string, { uri: string; title: string }>(sources.map(item => [item.uri, item])).values()
+        ) as { uri: string; title: string }[];
 
         return { text, sources: uniqueSources };
     } catch (error) {
