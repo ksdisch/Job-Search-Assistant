@@ -1,7 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FitAnalysis, Job } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Lazily instantiate the client so a missing API key doesn't crash initial render
+let ai: GoogleGenAI | null = null;
+function getAI(): GoogleGenAI {
+  if (ai) return ai;
+  const apiKey = (process.env.API_KEY as string | undefined)
+    || (process.env.GEMINI_API_KEY as string | undefined)
+    || (typeof window !== 'undefined' ? (window as any)?.VITE_GEMINI_API_KEY : undefined);
+  if (!apiKey) {
+    throw new Error("Gemini API key is not configured. Set GEMINI_API_KEY in your env.");
+  }
+  ai = new GoogleGenAI({ apiKey });
+  return ai;
+}
 
 const PRO_MODEL = 'gemini-2.5-pro';
 const FLASH_MODEL = 'gemini-2.5-flash';
@@ -23,7 +35,7 @@ export const extractTextFromFile = async (file: File): Promise<string> => {
       const filePart = await fileToGenerativePart(file);
       const prompt = "Extract the text content from this file. After extracting, please format it for optimal readability, ensuring proper line breaks, consistent spacing, and clear paragraph structure. Output only the formatted text, with no additional commentary or introductions.";
 
-      const response = await ai.models.generateContent({
+      const response = await getAI().models.generateContent({
         model: FLASH_MODEL,
         contents: { parts: [filePart, { text: prompt }] },
       });
@@ -55,7 +67,7 @@ export const analyzeJobFit = async (jobDescription: string, resume: string): Pro
       ---
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: PRO_MODEL,
       contents: prompt,
       config: {
@@ -84,7 +96,7 @@ export const analyzeJobFit = async (jobDescription: string, resume: string): Pro
 
 const generateText = async (prompt: string, model: string, config?: Record<string, any>): Promise<string> => {
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model,
       contents: prompt,
        config: {
@@ -160,120 +172,13 @@ export const improveContent = (contentToImprove: string): Promise<string> => {
   return generateText(prompt, FLASH_MODEL);
 };
 
-export const improveResume = (resumeText: string): Promise<string> => {
-    const prompt = `
-    As an expert career coach and professional resume writer, thoroughly review and rewrite the following resume.
-    Your goal is to make it more impactful, professional, and tailored to stand out for roles like software engineering, product management, and other tech positions.
+// --- Chatbot Functionality ---
+let chatSession: Chat | null = null;
+let currentSystemInstruction: string | null = null;
 
-    Focus on the following improvements:
-    1.  **Action Verbs:** Start each bullet point with a strong, dynamic action verb.
-    2.  **Quantifiable Achievements:** Whenever possible, add metrics and quantifiable results to demonstrate impact (e.g., "increased efficiency by 20%", "managed a team of 5"). If numbers aren't present, frame responsibilities as achievements.
-    3.  **Conciseness:** Eliminate jargon, filler words, and passive voice. Make every word count.
-    4.  **Formatting:** Ensure clean and professional formatting. Use bullet points effectively. The professional summary should be a concise and powerful paragraph.
-    5.  **Keywords:** Naturally integrate relevant keywords for modern tech roles.
-
-    Return only the full, improved resume text. Do not include any commentary before or after.
-
-    ORIGINAL RESUME:
-    ---
-    ${resumeText}
-    ---
-    `;
-    return generateText(prompt, PRO_MODEL, { thinkingConfig: { thinkingBudget: 32768 } });
-};
-
-export const generateCareerGoals = (resumeText: string): Promise<string> => {
-    const prompt = `
-    Based on the provided resume, act as a career advisor and generate a set of career preferences and goals for the user to put into their AI Job Search Companion profile.
-    This context helps the AI provide more tailored advice.
-    The output should be a list covering the following points, with example content filled in based on the resume.
-
-    - Desired Roles:
-    - Industries of Interest:
-    - Years of Experience: (extract from resume)
-    - Location Preferences: (suggest common options like Remote, or major tech hubs if not specified)
-    - Target Companies: (suggest types like Startups, FAANG, etc.)
-    - Key Skills to Highlight: (extract top skills from resume)
-    - Career Goals: (infer potential short-term and long-term goals, e.g., leadership, specialization)
-
-    RESUME:
-    ---
-    ${resumeText}
-    ---
-    `;
-    return generateText(prompt, PRO_MODEL, { thinkingConfig: { thinkingBudget: 32768 } });
-};
-
-export const generateInterviewQuestions = async (jobDescription: string, resume: string): Promise<{ questions: { type: string; question: string; tip: string }[] }> => {
-    try {
-        const prompt = `
-            As an expert technical recruiter and interview coach, analyze the provided job description and candidate's resume.
-            Generate a list of 5-7 potential interview questions that are highly relevant to this specific role and candidate.
-
-            For each question, provide:
-            1. The question itself.
-            2. The type of question (e.g., "Behavioral", "Technical", "Situational").
-            3. A concise "Pro Tip" on how the candidate can best answer it, ideally by referencing their own experience from the resume.
-
-            JOB DESCRIPTION:
-            ---
-            ${jobDescription}
-            ---
-
-            RESUME:
-            ---
-            ${resume}
-            ---
-        `;
-
-        const response = await ai.models.generateContent({
-            model: PRO_MODEL,
-            contents: prompt,
-            config: {
-                thinkingConfig: { thinkingBudget: 32768 },
-                responseMimeType: 'application/json',
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        questions: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    type: { type: Type.STRING, description: 'Type of question (e.g., Behavioral, Technical)' },
-                                    question: { type: Type.STRING, description: 'The interview question' },
-                                    tip: { type: Type.STRING, description: 'A tip for answering, referencing the resume' },
-                                },
-                                required: ['type', 'question', 'tip'],
-                            },
-                        },
-                    },
-                    required: ['questions'],
-                },
-            },
-        });
-        
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText);
-    } catch (error) {
-        console.error("Error generating interview questions:", error);
-        throw new Error("Failed to generate interview questions. This is a complex task and may sometimes fail. Please try again.");
-    }
-};
-
-export const researchCompany = async (companyName: string, jobTitle: string): Promise<string> => {
-    try {
-        const prompt = `
-            Provide a concise research briefing about the company "${companyName}" for a candidate interviewing for the role of "${jobTitle}".
-            Use your search tool to find the most recent and relevant information.
-            
-            Structure your response in markdown with the following sections:
-            - **Company Overview:** What does the company do? What is its mission?
-            - **Recent News & Developments:** Mention 1-2 recent news items, product launches, or announcements.
-            - **Company Culture:** Briefly describe the company culture (e.g., fast-paced, collaborative, innovative).
-            - **Potential Interview Focus:** Based on the company and role, what areas might the interview focus on?
-        `;
-        const response = await ai.models.generateContent({
+function getChatSession(systemInstruction: string): Chat {
+    if (!chatSession || currentSystemInstruction !== systemInstruction) {
+        chatSession = ai.chats.create({
             model: FLASH_MODEL,
             contents: prompt,
             config: {
